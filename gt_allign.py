@@ -110,26 +110,160 @@ def align_tokens(norm_tokens: list[tuple], orig_tokens: list[str]):
     for norm_token in norm_tokens:
         if i > len(orig_tokens):
             break
+        current_norm_token = norm_token[1]
+        if current_norm_token == "&amp;":  # transform ampersand to utf string
+            current_norm_token = "&"
+
+        if current_norm_token == "etc":  # transform ampersand to utf string
+            current_norm_token = "&c"
+
         matching_token = orig_tokens[i]
-        word_cost_current_pair = word_cost(norm_token[1], matching_token)
+        if current_norm_token == matching_token:
+            aligned_tokens.append((norm_token[0], current_norm_token, matching_token))
+            i += 1
+            continue
+        word_cost_current_pair = word_cost(current_norm_token, matching_token)
+        combined_with_next = matching_token + " " + orig_tokens[i + 1]
+        wc_with_next = word_cost(current_norm_token, combined_with_next)
+
         if type(norm_token[0]) == str:
             if "-" in norm_token[0] or "–" in norm_token[0]:
                 matching_token += orig_tokens[i + 1]
                 # i += 1
                 i += 1
-        elif word_cost_current_pair >= 0.33:
-            combined_with_next = matching_token + " " + orig_tokens[i + 1]
-            if word_cost_current_pair > word_cost(norm_token[1], combined_with_next):
-                matching_token = combined_with_next
-                # i += 1
-                i += 1
-        aligned_tokens.append((norm_token[0], norm_token[1], matching_token))
+        # elif word_cost_current_pair >= 0.33:
+        elif word_cost_current_pair > wc_with_next and wc_with_next < 0.66:
+            matching_token = combined_with_next
+            # i += 1
+            i += 1
+
+        if word_cost_current_pair >= 0.95:
+            j = i
+            # limit = min(len(orig_tokens), len(norm_token))
+            max_i = len(orig_tokens) - 1
+            while j < max_i:
+                j += 1
+                next_word_in_orig = orig_tokens[j]
+                # wc_next_word_in_orig = word_cost(current_norm_token, next_word_in_orig)
+                if current_norm_token == next_word_in_orig:
+                    matching_token = next_word_in_orig
+                    i = j
+                    break
+            if j >= max_i:
+                matching_token = None
+                i -= 1
+
+        if current_norm_token == "&":  # transform utf ampersand back to original
+            current_norm_token = "&amp;"
+        aligned_tokens.append((norm_token[0], current_norm_token, matching_token))
+
         i += 1
 
     return aligned_tokens
 
 
+def save_to_excel(res, df, gt_key):
+    orig_map = {token_id: orig_token for token_id, _, orig_token in res}
+
+    df["Original Token"] = df["Token id"].map(orig_map)
+
+    print(df)
+    df.to_excel(f"./results/{gt_key}.xlsx", index=False)
+
+
+def process_one(gt_dir_path: str, gt_key: str) -> list:
+    gts = get_dfs_form_xlsx(gt_dir_path)
+    ceec_txt_dict = get_CEEC_texts(gts)
+
+    print(gt_key)
+    letter = ceec_txt_dict[gt_key]
+    print(letter)
+    # letter = letter.replace("Il caro Amico va partire subito, subito ", "")
+    # print(letter)
+    tokenized_orig_text = tokenize_text(letter)
+
+    df = gts[gt_key]["df"]
+    filtered_df = df[df["C7 correct"].notna()]
+    tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
+    # print(tuples_list)
+    print(len(tokenized_orig_text), len(tuples_list))
+    res = align_tokens(tuples_list, tokenized_orig_text)
+
+    save_to_excel(res, df, gt_key)
+    return res
+
+
+def process_all(gt_dir_path: str, dest_dir_path: str) -> None:
+    gts = get_dfs_form_xlsx(gt_dir_path)
+    ceec_txt_dict = get_CEEC_texts(gts)
+
+    for gt_key in gts.keys():
+        print(gt_key)
+        letter = ceec_txt_dict[gt_key]
+        tokenized_orig_text = tokenize_text(letter)
+
+        df = gts[gt_key]["df"]
+        filtered_df = df[df["C7 correct"].notna()]
+        tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
+        # print(tuples_list)
+        print(len(tokenized_orig_text), len(tuples_list))
+        res = align_tokens(tuples_list, tokenized_orig_text)
+
+        for thing in res:
+            print(thing)
+
+
 if __name__ == "__main__":
+    # process_all("./data/silver_standard/silver_standard/", "./data/")
+    test = [
+        "BENTHAJ_056",
+        "BURNEY_039",
+        "BURNEYF_013",
+        "CARTER_023",
+        "CLIFT_027",
+        "GARRICK_032",
+        "SWIFT_059",
+        "WENTWO2_146",
+    ]
+    dont_work = [
+        "DUKES_052",
+        "FLEMIN2_133",
+        "GIBBON_007",
+        "PEPYS3_035",
+        "SANCHO_024",
+        "TWINING_010",
+        "WEDGWOO_023",
+    ]
+    test = ["DUKES_052"]
+    for thing in test:
+        process_one("./data/silver_standard/silver_standard/", thing)
+    """
+    dfs = get_dfs_form_xlsx("./data/silver_standard/silver_standard/")
+    # print(dfs.keys())
+
+    # print(dfs["BURNEYF_013"])
+    # get_strs_from_df(dfs)
+    ceec_txt_dict = get_CEEC_texts(dfs)
+    # print(ceec_txt_dict["BURNEYF_013"])
+
+    # print(df[df["C7 correct"].notna()].head(50))
+    letter = "BENTHAJ_056"
+
+    tok_test = tokenize_text(ceec_txt_dict[letter])
+    # print(tok_test)
+
+    df = dfs[letter]["df"]
+    filtered_df = df[df["C7 correct"].notna()]
+
+    tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
+    # print(tuples_list)
+    print(len(tok_test), len(tuples_list))
+
+    res = align_tokens(tuples_list, tok_test)
+
+    print(res)
+    """
+    """
     dfs = get_dfs_form_xlsx("./data/silver_standard/silver_standard/")
     # print(dfs.keys())
 
@@ -160,6 +294,7 @@ if __name__ == "__main__":
 
     print(df)
     df.to_excel("./results/aligned_tokens.xlsx", index=False)
+    """
     """
     filtered_df = df[df["C7 correct"].notna()]
 
