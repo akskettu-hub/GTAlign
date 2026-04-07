@@ -4,7 +4,11 @@ import xml.etree.ElementTree as ET
 from nltk.tokenize import word_tokenize
 import Levenshtein
 
+# from pandas.io.orc import DataFrame
+
 from CEEC_400_data_parser import construct_xml_path_dict
+from nw import align_words
+from utils import load_tuple_list_from_json, save_tuple_list_to_json
 
 
 def get_dfs_form_xlsx(path: str) -> dict[str, pd.DataFrame]:
@@ -162,13 +166,16 @@ def align_tokens(norm_tokens: list[tuple], orig_tokens: list[str]):
     return aligned_tokens
 
 
-def save_to_excel(res, df, gt_key):
-    orig_map = {token_id: orig_token for token_id, _, orig_token in res}
+def generate_alignment_tuple_list(ceec_text: str, df) -> list:
+    tokenized_orig_text = tokenize_text(ceec_text)
 
-    df["Original Token"] = df["Token id"].map(orig_map)
+    filtered_df = df[df["C7 correct"].notna()]
+    tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
 
-    print(df)
-    df.to_excel(f"./results/{gt_key}.xlsx", index=False)
+    print(len(tokenized_orig_text), len(tuples_list))
+    res = align_words(tuples_list, tokenized_orig_text)
+
+    return res
 
 
 def process_one(gt_dir_path: str, gt_key: str) -> list:
@@ -187,9 +194,9 @@ def process_one(gt_dir_path: str, gt_key: str) -> list:
     tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
     # print(tuples_list)
     print(len(tokenized_orig_text), len(tuples_list))
-    res = align_tokens(tuples_list, tokenized_orig_text)
+    # res = align_tokens(tuples_list, tokenized_orig_text)
+    res = align_words(tuples_list, tokenized_orig_text)
 
-    save_to_excel(res, df, gt_key)
     return res
 
 
@@ -213,88 +220,55 @@ def process_all(gt_dir_path: str, dest_dir_path: str) -> None:
             print(thing)
 
 
-if __name__ == "__main__":
-    # process_all("./data/silver_standard/silver_standard/", "./data/")
-    test = [
-        "BENTHAJ_056",
-        "BURNEY_039",
-        "BURNEYF_013",
-        "CARTER_023",
-        "CLIFT_027",
-        "GARRICK_032",
-        "SWIFT_059",
-        "WENTWO2_146",
-    ]
-    dont_work = [
-        "DUKES_052",
-        "FLEMIN2_133",
-        "GIBBON_007",
-        "PEPYS3_035",
-        "SANCHO_024",
-        "TWINING_010",
-        "WEDGWOO_023",
-    ]
-    test = ["DUKES_052"]
-    for thing in test:
-        process_one("./data/silver_standard/silver_standard/", thing)
-    """
-    dfs = get_dfs_form_xlsx("./data/silver_standard/silver_standard/")
-    # print(dfs.keys())
+def process_all_to_tuple_list(gt_dir_path: str):
+    gts = get_dfs_form_xlsx(gt_dir_path)
+    ceec_txt_dict = get_CEEC_texts(gts)
 
-    # print(dfs["BURNEYF_013"])
-    # get_strs_from_df(dfs)
-    ceec_txt_dict = get_CEEC_texts(dfs)
-    # print(ceec_txt_dict["BURNEYF_013"])
+    for letter_id in gts.keys():
+        print(letter_id)
+        alignment_tuple = generate_alignment_tuple_list(
+            ceec_txt_dict[letter_id], gts[letter_id]["df"]
+        )
+        save_tuple_list_to_json(alignment_tuple, "./results/alignments/", letter_id)
 
-    # print(df[df["C7 correct"].notna()].head(50))
-    letter = "BENTHAJ_056"
 
-    tok_test = tokenize_text(ceec_txt_dict[letter])
-    # print(tok_test)
-
-    df = dfs[letter]["df"]
-    filtered_df = df[df["C7 correct"].notna()]
-
-    tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
-    # print(tuples_list)
-    print(len(tok_test), len(tuples_list))
-
-    res = align_tokens(tuples_list, tok_test)
-
-    print(res)
-    """
-    """
-    dfs = get_dfs_form_xlsx("./data/silver_standard/silver_standard/")
-    # print(dfs.keys())
-
-    # print(dfs["BURNEYF_013"])
-    # get_strs_from_df(dfs)
-    ceec_txt_dict = get_CEEC_texts(dfs)
-    # print(ceec_txt_dict["BURNEYF_013"])
-
-    # print(df[df["C7 correct"].notna()].head(50))
-
-    tok_test = tokenize_text(ceec_txt_dict["BURNEYF_013"])
-    # print(tok_test)
-
-    df = dfs["BURNEYF_013"]["df"]
-    filtered_df = df[df["C7 correct"].notna()]
-
-    tuples_list = list(zip(filtered_df["Token id"], filtered_df["Token"]))
-    # print(tuples_list)
-    print(len(tok_test), len(tuples_list))
-
-    # for i in range(len(tuples_list)):
-    #    print(tuples_list[i][0], tuples_list[i][1], tok_test[i])
-    res = align_tokens(tuples_list, tok_test)
-
+def save_to_excel(res, df, gt_key):
     orig_map = {token_id: orig_token for token_id, _, orig_token in res}
 
-    df["Original Token"] = df["Token id"].map(orig_map)
+    insert_pos = df.columns.get_loc("><") + 1
+    df.insert(insert_pos, "Original Token", df["Token id"].map(orig_map))
+    # df["Original Token"] = df["Token id"].map(orig_map)
 
     print(df)
-    df.to_excel("./results/aligned_tokens.xlsx", index=False)
-    """
+    df.to_excel(f"./results/{gt_key}.xlsx", index=False)
+
+
+def alignment_lists_to_excel():
+    checked_alginment_tuples_path = "./results/alignments/checked/"
+    files = glob.glob(checked_alginment_tuples_path + "*.json")
+
+    gts = get_dfs_form_xlsx("./data/silver_standard/silver_standard/")
+
+    for file in files:
+        print(file)
+        letter_id = file.split("/")[-1].replace(".json", "")
+        print(letter_id)
+
+        df = gts[letter_id]["df"]
+        alignment_tuple_list = load_tuple_list_from_json(file)
+
+        save_to_excel(alignment_tuple_list, df, letter_id)
+
+        print()
+
+
+if __name__ == "__main__":
+    # process_all("./data/silver_standard/silver_standard/", "./data/")
+
+    # process_all_to_tuple_list("./data/silver_standard/silver_standard/")
+
+    # load_tuple_list_from_json(che)
+    alignment_lists_to_excel()
     """
     filtered_df = df[df["C7 correct"].notna()]
 
