@@ -11,7 +11,3 @@ def load_tuple_list_from_json(path: str) -> list[tuple]:
     with open(path) as f:
         data = [tuple(json.loads(line)) for line in f]
     return data
-
-
-if __name__ == "__main__":
-    pass
