@@ -9,7 +9,7 @@ The purpose of this tool is to provide a column `Original Token` for spreadsheet
 ## Installation
 
 - Python 3.13.7 (Might work on other versions, but not tested.)
-- NOTE: Will not work on out of Windows. All paths are unix style.
+- NOTE: Will not work on out of the box Windows. All paths are unix style and these would have to be manually adjusted.
 `TODO:` make path handling more flexible and compatible with Windows
 
 ```bash
