@@ -80,8 +80,8 @@ def alignment_lists_to_excel(alignment_tuple_dir_path: str, gt_dir_path: str) ->
 
 
 if __name__ == "__main__":
-    # Note!: Uncomment one of the below to generate alignment tuple lists or generate .xlsx from them.
-    # Note!: Only run one at a time. Alignment tuple lists need manual parsing.
+    # NOTE: Uncomment one of the below to generate alignment tuple lists or generate .xlsx from them.
+    # NOTE: Only run one at a time. Alignment tuple lists need manual parsing.
     #
     alginment_tuples_dir_path = "./results/alignments/checked/"
     gt_dir_path = "./data/silver_standard/silver_standard/"
